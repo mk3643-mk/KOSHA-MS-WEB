@@ -1,0 +1,257 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { QUICK_LINKS } from '@/data/koshaData'
+import { ArrowLeft, Plus, FileText, UploadCloud, Trash2, Edit2, Check, X, Layers } from 'lucide-react'
+
+export default function AppendixPage() {
+    const params = useParams()
+    const router = useRouter()
+    const docId = params?.id
+
+    const [appendixData, setAppendixData] = useState(null)
+    const [documents, setDocuments] = useState([])
+    const [newItemTitle, setNewItemTitle] = useState('')
+    const [editingDocId, setEditingDocId] = useState(null)
+    const [editingTitle, setEditingTitle] = useState('')
+    const [isLoaded, setIsLoaded] = useState(false)
+
+    useEffect(() => {
+        const link = QUICK_LINKS.find(l => l.docId === docId)
+        if (link) {
+            setAppendixData(link)
+            // Load saved data for this specific docId if it exists
+            const savedData = localStorage.getItem(`appendix_docs_${docId}`)
+            if (savedData) {
+                try {
+                    setDocuments(JSON.parse(savedData))
+                } catch (e) {
+                    // Fallback if parsing fails
+                    setDocuments([{ id: '1', title: `${link.title} 초기 안내서`, customCode: 'DOC-001', fileName: null }])
+                }
+            } else {
+                setDocuments([
+                    { id: '1', title: `${link.title} 초기 안내서`, customCode: 'DOC-001', fileName: null },
+                ])
+            }
+            setIsLoaded(true)
+        }
+    }, [docId])
+
+    // Save changes to localStorage whenever documents array updates
+    useEffect(() => {
+        if (isLoaded && docId) {
+            localStorage.setItem(`appendix_docs_${docId}`, JSON.stringify(documents))
+        }
+    }, [documents, isLoaded, docId])
+
+    if (!appendixData) return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+            <div className="animate-pulse flex items-center gap-2 text-slate-500"><Layers className="animate-spin" /> 로딩 중...</div>
+        </div>
+    )
+
+    const handleAddDocument = (e) => {
+        e.preventDefault()
+        if (!newItemTitle.trim()) return
+
+        const newDoc = {
+            id: Date.now().toString(),
+            title: newItemTitle,
+            customCode: `NEW-${Math.floor(1000 + Math.random() * 9000)}`,
+            fileName: null
+        }
+        setDocuments([...documents, newDoc])
+        setNewItemTitle('')
+    }
+
+    const handleDelete = (id) => {
+        if(confirm('이 항목을 삭제하시겠습니까?')) {
+            setDocuments(documents.filter(d => d.id !== id))
+        }
+    }
+
+    const handleFileUpload = (e, id) => {
+        const file = e.target.files[0]
+        if (file) {
+            setDocuments(documents.map(d => d.id === id ? { ...d, fileName: file.name } : d))
+        }
+    }
+
+    const handleStartEdit = (doc) => {
+        setEditingDocId(doc.id)
+        setEditingTitle(doc.title)
+    }
+
+    const handleSaveEdit = (id) => {
+        if(!editingTitle.trim()) return
+        setDocuments(documents.map(d => d.id === id ? { ...d, title: editingTitle } : d))
+        setEditingDocId(null)
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
+            <div className="max-w-5xl mx-auto">
+                {/* Header Container */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                    {/* Header Left Component */}
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => router.push('/')}
+                            className="bg-white p-2.5 shadow-sm border border-slate-200 hover:border-slate-300 rounded-xl transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                        >
+                            <ArrowLeft size={22} />
+                        </button>
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded uppercase tracking-wider">Appendix</span>
+                                <h1 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">{appendixData.title}</h1>
+                            </div>
+                            <p className="text-sm text-slate-500">항목을 추가하고 관련 파일을 업로드 및 관리할 수 있습니다.</p>
+                        </div>
+                    </div>
+
+                    {/* Logo (Right) */}
+                    <div className="flex items-center justify-end gap-3 hidden md:flex">
+                        <div className="flex items-center gap-1.5 select-none">
+                            <svg width="28" height="28" viewBox="0 0 100 100" className="text-[#00509a]" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M50 6 C25.7 6 6 25.7 6 50 C6 74.3 25.7 94 50 94 C74.3 94 94 74.3 94 50 C94 25.7 74.3 6 50 6 Z M50 20 C66.568 20 80 33.431 80 50 C80 66.568 66.568 80 50 80 C33.431 80 20 66.568 20 50 C20 33.431 33.431 20 50 20 Z" />
+                                <path d="M50 27 L74 54 L26 54 Z" />
+                                <path d="M26 63 A 26 26 0 0 0 74 63 Z" />
+                            </svg>
+                            <span className="text-xl font-black text-[#5e5e5e] tracking-tight leading-none" style={{ fontFamily: 'Pretendard, "Malgun Gothic", sans-serif', letterSpacing: '-0.05em' }}>
+                                우미
+                            </span>
+                        </div>
+                        <span className="text-sm font-bold text-slate-600 border-l-2 border-slate-300 pl-3 leading-none flex items-center">
+                            안전보건실
+                        </span>
+                    </div>
+                </div>
+
+                {/* Main Content Body */}
+                <div className="h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 w-full mb-8 rounded-full opacity-20"></div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    {/* Left Column (Actions) */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-8">
+                            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <Plus size={20} className="text-blue-500" />
+                                새 항목 추가
+                            </h2>
+                            <form onSubmit={handleAddDocument} className="flex flex-col gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500 mb-1.5 block">항목 명칭</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm font-medium text-slate-800 shadow-sm"
+                                        placeholder="예: 공통 작업기준서"
+                                        value={newItemTitle}
+                                        onChange={(e) => setNewItemTitle(e.target.value)}
+                                    />
+                                </div>
+                                <button 
+                                    type="submit"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                >
+                                    <Plus size={18} /> 컬렉션에 추가
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {/* Right Column (List) */}
+                    <div className="lg:col-span-3">
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="p-5 md:p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <FileText size={20} className="text-slate-500"/>
+                                    등록된 관리 목록
+                                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full ml-1">
+                                        총 {documents.length}개
+                                    </span>
+                                </h2>
+                            </div>
+                            
+                            {documents.length === 0 ? (
+                                <div className="p-16 text-center text-slate-500 flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                                        <FileText size={32} className="text-slate-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-700">등록된 항목이 없습니다</h3>
+                                    <p className="text-sm mt-2 text-slate-500 max-w-sm">
+                                        좌측 폼을 이용해 '{appendixData.title}'에 속할 새로운 항목(기준서 등)을 추가해보세요. 항목 수 제한 없이 무제한으로 저장 가능합니다.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-100">
+                                    {documents.map((doc, idx) => (
+                                        <div key={doc.id} className="p-5 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 group">
+                                            
+                                            <div className="flex-1 flex gap-4 items-start">
+                                                <div className="bg-slate-100/80 border border-slate-200 text-slate-400 p-2.5 rounded-xl shrink-0 mt-0.5 group-hover:bg-blue-50 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">
+                                                    <span className="text-xs font-extrabold w-4 h-4 flex items-center justify-center">{idx + 1}</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    {editingDocId === doc.id ? (
+                                                        <div className="flex gap-2 mb-2 w-full max-w-sm">
+                                                            <input 
+                                                                autoFocus
+                                                                type="text" 
+                                                                value={editingTitle} 
+                                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                                className="border border-slate-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/50 w-full font-medium text-sm"
+                                                            />
+                                                            <button onClick={() => handleSaveEdit(doc.id)} className="bg-emerald-50 border border-emerald-200 text-emerald-600 p-1.5 rounded-md hover:bg-emerald-100 shadow-sm"><Check size={16}/></button>
+                                                            <button onClick={() => setEditingDocId(null)} className="bg-white border border-slate-300 text-slate-500 p-1.5 rounded-md hover:bg-slate-50 shadow-sm"><X size={16}/></button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <h3 className="text-[17px] font-bold text-slate-800">{doc.title}</h3>
+                                                            <button onClick={() => handleStartEdit(doc)} className="text-slate-300 hover:text-blue-500 transition-colors p-1" title="이름 수정"><Edit2 size={14}/></button>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 border border-slate-200 px-2 py-0.5 rounded shrink-0">
+                                                            ID: {doc.customCode}
+                                                        </span>
+                                                        {doc.fileName && (
+                                                            <span className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200 truncate max-w-[200px] md:max-w-xs">
+                                                                <Check size={12} strokeWidth={3} /> {doc.fileName}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-start md:justify-end shrink-0 pl-[46px] md:pl-0">
+                                                <label className={`cursor-pointer border px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm
+                                                    ${doc.fileName ? 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50' : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300'}`}
+                                                >
+                                                    <UploadCloud size={16} />
+                                                    {doc.fileName ? '파일 변경' : '문서 첨부'}
+                                                    <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, doc.id)} />
+                                                </label>
+                                                <button 
+                                                    onClick={() => handleDelete(doc.id)}
+                                                    className="p-2 ml-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                    title="이 항목 삭제"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    )
+}
