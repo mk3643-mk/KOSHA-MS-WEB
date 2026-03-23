@@ -20,7 +20,7 @@ const DEFAULT_RECENT_UPDATES = [
     { type: '문서목록', title: '현장 문서체계표 및 준공이관 목록', date: '2024-03-15', status: 'new', category: 'other' },
 ];
 
-export default function Dashboard() {
+function DashboardContent() {
     const [searchQuery, setSearchQuery] = useState('')
     const [openChapter, setOpenChapter] = useState(null)
     const [selectedStandard, setSelectedStandard] = useState(null)
@@ -1137,5 +1137,13 @@ export default function Dashboard() {
                 </div>
             )}
         </div>
+    )
+}
+
+export default function Dashboard() {
+    return (
+        <React.Suspense fallback={<div>Loading...</div>}>
+            <DashboardContent />
+        </React.Suspense>
     )
 }
