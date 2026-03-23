@@ -39,6 +39,27 @@ function DashboardContent() {
     const [tempFilePath, setTempFilePath] = useState('')
     const [history, setHistory] = useState([])
     const [showUndoToast, setShowUndoToast] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
+
+    const uploadToBlob = async (file) => {
+        setIsUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!res.ok) throw new Error('Upload failed');
+            return await res.json();
+        } catch (error) {
+            console.error('Upload Error:', error);
+            alert('파일 업로드에 실패했습니다. (Vercel 환경 변수가 올바른지 확인해주세요)');
+            return null;
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const pushToHistory = () => {
         const state = {
@@ -66,7 +87,16 @@ function DashboardContent() {
             e.preventDefault();
             e.stopPropagation();
         }
+        
+        const fileData = (fileId && typeof uploadedFiles[fileId] === 'object') ? uploadedFiles[fileId] : null;
+        if (fileData && fileData.url) {
+            window.open(fileData.url, '_blank');
+            return;
+        }
+
         let fileName = fileNameOverride || (fileId ? uploadedFiles[fileId] : null);
+        if (typeof fileName === 'object') fileName = fileName.name;
+
         if (!fileName) {
             alert('첨부된 파일이 없습니다. 먼저 파일을 업로드해주세요.');
             return;
@@ -182,12 +212,15 @@ function DashboardContent() {
 
     const handleCancelEdit = (e) => { e.preventDefault(); e.stopPropagation(); setEditingItem(null); }
 
-    const handleFileUpload = (e, fileId) => {
+    const handleFileUpload = async (e, fileId) => {
         const file = e.target.files[0];
         if (file) {
+            alert("업로드 중입니다... 잠시만 기다려주세요.");
+            const uploadedBlob = await uploadToBlob(file);
+            const fileData = uploadedBlob ? { name: file.name, url: uploadedBlob.url } : file.name;
             const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
             pushToHistory();
-            setUploadedFiles(prev => ({ ...prev, [fileId]: file.name }));
+            setUploadedFiles(prev => ({ ...prev, [fileId]: fileData }));
             setKoshaData(prevData => prevData.map(chapter => {
                 const now = new Date().toLocaleDateString('ko-KR');
                 let newChapterName = chapter.chapter;
@@ -297,9 +330,13 @@ function DashboardContent() {
 
     const handleGoBack = () => { setSearchQuery(''); setSelectedStandard(null); }
 
-    const handleAddAttachment = (e, stdId) => {
+    const handleAddAttachment = async (e, stdId) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        alert("업로드 중입니다... 잠시만 기다려주세요.");
+        const uploadedBlob = await uploadToBlob(file);
+        const fileData = uploadedBlob ? { name: file.name, url: uploadedBlob.url } : file.name;
 
         const now = new Date().toLocaleDateString('ko-KR');
         pushToHistory();
@@ -311,7 +348,7 @@ function DashboardContent() {
                 return std;
             })
         })));
-        setUploadedFiles(prev => ({ ...prev, [newAttachment.id]: file.name }));
+        setUploadedFiles(prev => ({ ...prev, [newAttachment.id]: fileData }));
         
         if (selectedStandard?.id === stdId) {
             setSelectedStandard(prev => ({
@@ -341,9 +378,14 @@ function DashboardContent() {
         setShowUndoToast(true); setTimeout(() => setShowUndoToast(false), 5000);
     };
 
-    const handleAddRelatedDoc = (e, standardId) => {
+    const handleAddRelatedDoc = async (e, standardId) => {
         const file = e.target.files[0];
         if (!file || !standardId) return;
+
+        alert("업로드 중입니다... 잠시만 기다려주세요.");
+        const uploadedBlob = await uploadToBlob(file);
+        const fileData = uploadedBlob ? { name: file.name, url: uploadedBlob.url } : file.name;
+
         const now = new Date().toLocaleDateString('ko-KR');
         pushToHistory();
         const newDoc = { id: `${standardId}-EXT-${Date.now().toString().slice(-4)}`, name: file.name.split('.')[0] || "새 문서양식", lastModified: now };
@@ -354,7 +396,7 @@ function DashboardContent() {
             });
             return { ...chapter, standards: updatedStandards };
         }));
-        setUploadedFiles(prev => ({ ...prev, [newDoc.id]: file.name }));
+        setUploadedFiles(prev => ({ ...prev, [newDoc.id]: fileData }));
         if (selectedStandard?.id === standardId) {
             setSelectedStandard(prev => ({ ...prev, related_docs: [...prev.related_docs, newDoc], lastModified: now }));
         }
@@ -384,9 +426,14 @@ function DashboardContent() {
         setShowUndoToast(true); setTimeout(() => setShowUndoToast(false), 5000);
     }
 
-    const handleAddStandard = (e, chapterId) => {
+    const handleAddStandard = async (e, chapterId) => {
         const file = e.target.files[0];
         if (!file || !chapterId) return;
+
+        alert("업로드 중입니다... 잠시만 기다려주세요.");
+        const uploadedBlob = await uploadToBlob(file);
+        const fileData = uploadedBlob ? { name: file.name, url: uploadedBlob.url } : file.name;
+
         const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
         
         let id = '';
@@ -408,7 +455,7 @@ function DashboardContent() {
             if (chap.chapter === chapterId) return { ...chap, standards: [...chap.standards, newStandard] };
             return chap;
         }));
-        setSelectedStandard(newStandard); setUploadedFiles(prev => ({ ...prev, [id]: file.name }));
+        setSelectedStandard(newStandard); setUploadedFiles(prev => ({ ...prev, [id]: fileData }));
 
         // Update recent updates
         const newUpdate = {
@@ -599,7 +646,7 @@ function DashboardContent() {
                                 <div className={`p-2 rounded-lg ${uploadedFiles['master-list'] ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}><Layers size={18} /></div>
                                 <div className="overflow-hidden">
                                     <h4 className="text-sm font-bold text-slate-700 truncate">전체 문서목록표</h4>
-                                    <p className="text-[10px] text-slate-500 truncate">{uploadedFiles['master-list'] ? uploadedFiles['master-list'] : 'PDF 파일을 업로드하세요'}</p>
+                                    <p className="text-[10px] text-slate-500 truncate">{uploadedFiles['master-list'] ? (typeof uploadedFiles['master-list'] === 'object' ? uploadedFiles['master-list'].name : uploadedFiles['master-list']) : 'PDF 파일을 업로드하세요'}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1 ml-2">
@@ -758,7 +805,7 @@ function DashboardContent() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
                             {recentUpdates.slice(0, 4).map((update, idx) => (
-                                <div key={idx} onClick={(e) => handleFileView(e, null, update.category === 'manual' || update.category === 'standard' || update.category === 'form' ? uploadedFiles[update.id] || update.title + '.pdf' : update.title + '.pdf')} className="p-4 hover:bg-slate-50 transition-all flex items-center justify-between group cursor-pointer relative overflow-hidden">
+                                <div key={idx} onClick={(e) => handleFileView(e, update.id, update.title + '.pdf')} className="p-4 hover:bg-slate-50 transition-all flex items-center justify-between group cursor-pointer relative overflow-hidden">
                                     <div className="flex items-center gap-4 relative z-10">
                                         <div title={update.type} className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${
                                             update.type === '매뉴얼' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
@@ -1099,7 +1146,7 @@ function DashboardContent() {
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
                             {recentUpdates.map((update, idx) => (
-                                <div key={idx} onClick={(e) => { handleFileView(e, null, update.title + '.pdf'); setIsAllUpdatesModalOpen(false); }} className="p-4 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl transition-all cursor-pointer flex items-center justify-between group">
+                                <div key={idx} onClick={(e) => { handleFileView(e, update.id, update.title + '.pdf'); setIsAllUpdatesModalOpen(false); }} className="p-4 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl transition-all cursor-pointer flex items-center justify-between group">
                                     <div className="flex items-center gap-4">
                                         <div title={update.type} className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-sm ${
                                             update.type === '매뉴얼' ? 'bg-blue-100 text-blue-600' :
