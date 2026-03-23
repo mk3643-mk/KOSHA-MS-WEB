@@ -18,21 +18,44 @@ export default function AppendixPage() {
     const [isLoaded, setIsLoaded] = useState(false)
 
     useEffect(() => {
-        const link = QUICK_LINKS.find(l => l.docId === docId)
-        if (link) {
-            setAppendixData(link)
+        setIsLoaded(false) // Reset loaded state on docId change
+        
+        let linkTitle = ""
+        // Attempt to load renamed quickLinks from dashboard
+        const savedLinks = localStorage.getItem('kosha_quick_links')
+        if (savedLinks) {
+            try {
+                const links = JSON.parse(savedLinks)
+                const link = links.find(l => l.docId === docId)
+                if (link) {
+                    setAppendixData(link)
+                    linkTitle = link.title
+                }
+            } catch (e) {
+                console.error("Failed to parse quick links")
+            }
+        }
+        
+        if (!linkTitle) {
+            const staticLink = QUICK_LINKS.find(l => l.docId === docId)
+            if (staticLink) {
+                setAppendixData(staticLink)
+                linkTitle = staticLink.title
+            }
+        }
+
+        if (linkTitle) {
             // Load saved data for this specific docId if it exists
             const savedData = localStorage.getItem(`appendix_docs_${docId}`)
             if (savedData) {
                 try {
                     setDocuments(JSON.parse(savedData))
                 } catch (e) {
-                    // Fallback if parsing fails
-                    setDocuments([{ id: '1', title: `${link.title} 초기 안내서`, customCode: 'DOC-001', fileName: null }])
+                    setDocuments([{ id: '1', title: `${linkTitle} 초기 안내서`, customCode: 'DOC-001', fileName: null }])
                 }
             } else {
                 setDocuments([
-                    { id: '1', title: `${link.title} 초기 안내서`, customCode: 'DOC-001', fileName: null },
+                    { id: '1', title: `${linkTitle} 초기 안내서`, customCode: 'DOC-001', fileName: null },
                 ])
             }
             setIsLoaded(true)
@@ -54,28 +77,29 @@ export default function AppendixPage() {
 
     const handleAddDocument = (e) => {
         e.preventDefault()
-        if (!newItemTitle.trim()) return
+        const finalTitle = newItemTitle.trim() || '새 항목'
 
         const newDoc = {
             id: Date.now().toString(),
-            title: newItemTitle,
+            title: finalTitle,
             customCode: `NEW-${Math.floor(1000 + Math.random() * 9000)}`,
             fileName: null
         }
-        setDocuments([...documents, newDoc])
+        
+        setDocuments(prev => [...prev, newDoc])
         setNewItemTitle('')
     }
 
     const handleDelete = (id) => {
         if(confirm('이 항목을 삭제하시겠습니까?')) {
-            setDocuments(documents.filter(d => d.id !== id))
+            setDocuments(prev => prev.filter(d => d.id !== id))
         }
     }
 
     const handleFileUpload = (e, id) => {
         const file = e.target.files[0]
         if (file) {
-            setDocuments(documents.map(d => d.id === id ? { ...d, fileName: file.name } : d))
+            setDocuments(prev => prev.map(d => d.id === id ? { ...d, fileName: file.name } : d))
         }
     }
 
@@ -86,7 +110,7 @@ export default function AppendixPage() {
 
     const handleSaveEdit = (id) => {
         if(!editingTitle.trim()) return
-        setDocuments(documents.map(d => d.id === id ? { ...d, title: editingTitle } : d))
+        setDocuments(prev => prev.map(d => d.id === id ? { ...d, title: editingTitle.trim() } : d))
         setEditingDocId(null)
     }
 
@@ -98,7 +122,7 @@ export default function AppendixPage() {
                     {/* Header Left Component */}
                     <div className="flex items-center gap-4">
                         <button 
-                            onClick={() => router.push('/')}
+                            onClick={() => router.push('/?tab=appendix#appendix-section')}
                             className="bg-white p-2.5 shadow-sm border border-slate-200 hover:border-slate-300 rounded-xl transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                         >
                             <ArrowLeft size={22} />
@@ -156,7 +180,7 @@ export default function AppendixPage() {
                                     type="submit"
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                                 >
-                                    <Plus size={18} /> 컬렉션에 추가
+                                    <Plus size={18} /> 항목 추가
                                 </button>
                             </form>
                         </div>
