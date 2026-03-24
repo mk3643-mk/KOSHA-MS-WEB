@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { QUICK_LINKS } from '@/data/koshaData'
-import { ArrowLeft, Plus, FileText, UploadCloud, Trash2, Edit2, Check, X, Layers } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, UploadCloud, Trash2, Edit2, Check, X, Layers, ExternalLink } from 'lucide-react'
 
 export default function AppendixPage() {
     const params = useParams()
@@ -96,10 +96,47 @@ export default function AppendixPage() {
         }
     }
 
-    const handleFileUpload = (e, id) => {
+    const handleFileUpload = async (e, id) => {
         const file = e.target.files[0]
-        if (file) {
-            setDocuments(prev => prev.map(d => d.id === id ? { ...d, fileName: file.name } : d))
+        if (!file) return
+
+        const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name
+
+        // Try to upload to Vercel Blob
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await fetch('/api/upload', { method: 'POST', body: formData })
+            if (res.ok) {
+                const blob = await res.json()
+                setDocuments(prev => prev.map(d =>
+                    d.id === id
+                        ? { ...d, fileName: file.name, fileUrl: blob.url, title: fileNameWithoutExt }
+                        : d
+                ))
+                return
+            }
+        } catch (err) {
+            console.warn('Blob upload failed, saving filename only:', err)
+        }
+
+        // Fallback: save filename only (local mode)
+        setDocuments(prev => prev.map(d =>
+            d.id === id
+                ? { ...d, fileName: file.name, fileUrl: null, title: fileNameWithoutExt }
+                : d
+        ))
+    }
+
+    const handleOpenFile = (doc) => {
+        if (doc.fileUrl) {
+            window.open(doc.fileUrl, '_blank')
+        } else if (doc.fileName) {
+            const safePath = doc.fileName.replace(/\\/g, '/').split('/')
+                .map(seg => encodeURIComponent(seg)).join('/')
+            window.open(`/uploads/${safePath}`, '_blank')
+        } else {
+            alert('첨부된 파일이 없습니다. 먼저 파일을 업로드해주세요.')
         }
     }
 
@@ -233,7 +270,18 @@ export default function AppendixPage() {
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <h3 className="text-[17px] font-bold text-slate-800">{doc.title}</h3>
+                                                            <h3
+                                                                className={`text-[17px] font-bold transition-colors ${
+                                                                    doc.fileName
+                                                                        ? 'text-blue-700 hover:text-blue-900 hover:underline cursor-pointer'
+                                                                        : 'text-slate-800'
+                                                                }`}
+                                                                onClick={() => doc.fileName && handleOpenFile(doc)}
+                                                                title={doc.fileName ? '클릭하여 파일 열기' : ''}
+                                                            >
+                                                                {doc.title}
+                                                                {doc.fileName && <ExternalLink size={14} className="inline ml-1 opacity-60" />}
+                                                            </h3>
                                                             <button onClick={() => handleStartEdit(doc)} className="text-slate-300 hover:text-blue-500 transition-colors p-1" title="이름 수정"><Edit2 size={14}/></button>
                                                         </div>
                                                     )}
@@ -242,9 +290,12 @@ export default function AppendixPage() {
                                                             ID: {doc.customCode}
                                                         </span>
                                                         {doc.fileName && (
-                                                            <span className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200 truncate max-w-[200px] md:max-w-xs">
+                                                            <button
+                                                                onClick={() => handleOpenFile(doc)}
+                                                                className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200 truncate max-w-[200px] md:max-w-xs hover:bg-emerald-100 transition-colors"
+                                                            >
                                                                 <Check size={12} strokeWidth={3} /> {doc.fileName}
-                                                            </span>
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
