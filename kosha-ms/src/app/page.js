@@ -41,6 +41,13 @@ function DashboardContent() {
     const [showUndoToast, setShowUndoToast] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
 
+    // Helper added to fix React object render crash
+    const getFileName = (fileData) => {
+        if (!fileData) return '';
+        if (typeof fileData === 'object' && fileData !== null) return fileData.name || '';
+        return String(fileData);
+    };
+
     const uploadToBlob = async (file) => {
         setIsUploading(true);
         try {
@@ -918,8 +925,8 @@ function DashboardContent() {
                                                                     </div>
                                                                 ) : (
                                                                     <>
-                                                                        <span title={uploadedFiles[`manual-${chapter.chapter}`]} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded truncate max-w-[120px]">{uploadedFiles[`manual-${chapter.chapter}`]}</span>
-                                                                        <button onClick={e => handleStartEditFilePath(e, `manual-${chapter.chapter}`, uploadedFiles[`manual-${chapter.chapter}`])} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={12} /></button>
+                                                                        <span title={getFileName(uploadedFiles[`manual-${chapter.chapter}`])} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded truncate max-w-[120px]">{getFileName(uploadedFiles[`manual-${chapter.chapter}`])}</span>
+                                                                        <button onClick={e => handleStartEditFilePath(e, `manual-${chapter.chapter}`, getFileName(uploadedFiles[`manual-${chapter.chapter}`]))} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={12} /></button>
                                                                         <button onClick={(e) => handleRemoveFile(e, `manual-${chapter.chapter}`)} className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors"><X size={14} /></button>
                                                                     </>
                                                                 )}
@@ -976,8 +983,8 @@ function DashboardContent() {
                                                                                     </div>
                                                                                 ) : (
                                                                                     <>
-                                                                                        <span title={uploadedFiles[std.id]} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded truncate max-w-[120px]">{uploadedFiles[std.id]}</span>
-                                                                                        <button onClick={e => handleStartEditFilePath(e, std.id, uploadedFiles[std.id])} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={12} /></button>
+                                                                                        <span title={getFileName(uploadedFiles[std.id])} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded truncate max-w-[120px]">{getFileName(uploadedFiles[std.id])}</span>
+                                                                                        <button onClick={e => handleStartEditFilePath(e, std.id, getFileName(uploadedFiles[std.id]))} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={12} /></button>
                                                                                         <button onClick={(e) => { e.stopPropagation(); handleRemoveFile(e, std.id); }} className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors"><X size={14} /></button>
                                                                                     </>
                                                                                 )}
@@ -1016,9 +1023,9 @@ function DashboardContent() {
                                                                                                 </div>
                                                                                             ) : (
                                                                                                 <div className="flex items-center gap-1">
-                                                                                                    <span title={uploadedFiles[att.id]} className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded truncate max-w-[100px] font-medium">{uploadedFiles[att.id]}</span>
+                                                                                                    <span title={getFileName(uploadedFiles[att.id])} className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded truncate max-w-[100px] font-medium">{getFileName(uploadedFiles[att.id])}</span>
                                                                                                     <div className="opacity-0 group-hover/att:opacity-100 flex items-center gap-0.5 transition-opacity">
-                                                                                                        <button onClick={e => handleStartEditFilePath(e, att.id, uploadedFiles[att.id])} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={10} /></button>
+                                                                                                        <button onClick={e => handleStartEditFilePath(e, att.id, getFileName(uploadedFiles[att.id]))} className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="파일 경로 수정"><Edit2 size={10} /></button>
                                                                                                         <button onClick={() => handleDeleteAttachment(std.id, att.id)} className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors" title="첨부 삭제"><X size={12} /></button>
                                                                                                     </div>
                                                                                                 </div>
@@ -1107,9 +1114,9 @@ function DashboardContent() {
                                                                     </div>
                                                                     {uploadedFiles[doc.id] && (
                                                                         <div className="mt-2 flex items-center justify-between border-t border-slate-50 pt-2 px-1">
-                                                                            <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded truncate max-w-[100px]">{uploadedFiles[doc.id]}</span>
+                                                                            <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded truncate max-w-[100px]">{getFileName(uploadedFiles[doc.id])}</span>
                                                                             <div className="flex items-center gap-0.5">
-                                                                                <button onClick={e => handleStartEditFilePath(e, doc.id, uploadedFiles[doc.id])} className="p-0.5 text-slate-400 hover:text-blue-600"><Edit2 size={10} /></button>
+                                                                                <button onClick={e => handleStartEditFilePath(e, doc.id, getFileName(uploadedFiles[doc.id]))} className="p-0.5 text-slate-400 hover:text-blue-600"><Edit2 size={10} /></button>
                                                                                 <button onClick={e => handleRemoveFile(e, doc.id)} className="p-0.5 text-slate-400 hover:text-red-500"><X size={10} /></button>
                                                                             </div>
                                                                         </div>
