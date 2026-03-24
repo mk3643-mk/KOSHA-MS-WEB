@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { KOSHA_DATA, QUICK_LINKS } from '@/data/koshaData'
-import { Search, ChevronDown, ChevronUp, ChevronRight, FileText, ClipboardList, Hand, AlertTriangle, FileCheck, Layers, ArrowLeft, Book, BookOpen, UploadCloud, X, Home, Clock, ExternalLink, Edit2, Check, Plus, Trash2, History, Star, Paperclip, RotateCcw } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, ChevronRight, FileText, ClipboardList, Hand, AlertTriangle, FileCheck, Layers, ArrowLeft, Book, BookOpen, UploadCloud, X, Home, Clock, ExternalLink, Edit2, Check, Plus, Trash2, History, Star, Paperclip, RotateCcw, Menu } from 'lucide-react'
 
 // Map icon string to component
 const iconMap = {
@@ -40,6 +40,7 @@ function DashboardContent() {
     const [history, setHistory] = useState([])
     const [showUndoToast, setShowUndoToast] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
     // Helper added to fix React object render crash
     const getFileName = (fileData) => {
@@ -329,6 +330,7 @@ function DashboardContent() {
 
     const selectChapter = (chapterTitle) => {
         setOpenChapter(chapterTitle); setSelectedStandard(null); setSearchQuery('');
+        setIsMobileMenuOpen(false);
         setTimeout(() => {
             const mainContent = document.getElementById('main-content');
             if (mainContent) mainContent.scrollTo({ top: 0, behavior: 'smooth' });
@@ -534,7 +536,7 @@ function DashboardContent() {
         setShowUndoToast(true); setTimeout(() => setShowUndoToast(false), 5000);
     }
 
-    const handleGoHome = () => { setSearchQuery(''); setSelectedStandard(null); setOpenChapter(null); }
+    const handleGoHome = () => { setSearchQuery(''); setSelectedStandard(null); setOpenChapter(null); setIsMobileMenuOpen(false); }
 
     const handleStartEditFilePath = (e, fileId, currentPath) => {
         e.preventDefault(); e.stopPropagation();
@@ -626,7 +628,21 @@ function DashboardContent() {
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col md:flex-row">
-            <aside className="w-full md:w-80 bg-white border-r border-slate-200 shadow-sm flex flex-col flex-shrink-0 h-auto md:h-screen md:sticky md:top-0">
+            {/* 모바일 오버레이 배경 */}
+            {isMobileMenuOpen && (
+                <div
+                    className="fixed inset-0 bg-slate-900/50 z-40 md:hidden"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            {/* 사이드바: PC - sticky 고정, 모바일 - 슬라이드 오버레이 */}
+            <aside className={`
+                fixed top-0 left-0 h-full w-[280px] bg-white border-r border-slate-200 shadow-sm flex flex-col flex-shrink-0 z-50
+                transition-transform duration-300 ease-in-out
+                ${ isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full' }
+                md:relative md:w-80 md:translate-x-0 md:z-auto md:h-screen md:sticky md:top-0
+            `}>
                 <div className="p-5 border-b border-slate-200 bg-white">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
@@ -665,9 +681,21 @@ function DashboardContent() {
                         </div>
                         <input type="file" ref={masterListInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'master-list')} />
                     </div>
+                    {/* 부록 바로가기 버튼 - 전체 문서목록표 하단 */}
+                    <button
+                        onClick={() => selectChapter('부록')}
+                        className={`mt-3 w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
+                            openChapter === '부록'
+                                ? 'bg-blue-600 text-white shadow-blue-200'
+                                : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-200'
+                        }`}
+                    >
+                        <ClipboardList size={17} />
+                        <span>부록 (Appendix)</span>
+                    </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 hidden md:block">
+                <div className="flex-1 overflow-y-auto p-4">
                     <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">매뉴얼 목차</h2>
                     <nav className="space-y-1">
                         {filteredData.map((data, idx) => (
@@ -706,7 +734,7 @@ function DashboardContent() {
                                     <div className="mt-1 ml-4 pl-3 border-l-2 border-slate-100 space-y-1">
                                         {data.standards.map((std) => (
                                             <div key={std.id} className={`w-full flex items-center justify-between px-3 py-1.5 rounded-md transition-colors group/standard ${selectedStandard?.id === std.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
-                                                <div className="flex-1 truncate mr-2 text-sm cursor-pointer" onClick={() => setSelectedStandard(std)}>
+                                                <div className="flex-1 truncate mr-2 text-sm cursor-pointer" onClick={() => { setSelectedStandard(std); setIsMobileMenuOpen(false); }}>
                                                     {editingItem?.type === 'standard' && editingItem?.id === std.id && editingItem?.parentId === data.chapter ? (
                                                         <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                                             <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e)} className="w-full text-xs text-blue-700 border-b border-blue-500 focus:outline-none bg-white px-1" autoFocus />
@@ -738,17 +766,26 @@ function DashboardContent() {
                                 )}
                             </div>
                         ))}
-                        <div className="mt-4 pt-4 border-t border-slate-100">
-                            <button onClick={() => selectChapter('부록')} className={`w-full text-left px-3 py-2.5 rounded-md transition-all flex items-center gap-3 group ${openChapter === '부록' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}>
-                                <div className={`${openChapter === '부록' ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`}><ClipboardList size={20} /></div>
-                                <span className={`text-sm font-bold ${openChapter === '부록' ? 'text-white' : ''}`}>부록 (Appendix)</span>
-                            </button>
-                        </div>
                     </nav>
                 </div>
             </aside>
 
-            <main id="main-content" className="flex-1 overflow-y-auto p-4 md:p-8">
+            <main id="main-content" className="flex-1 overflow-y-auto">
+                {/* 모바일 상단 헤더바 */}
+                <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-lg shadow-blue-100"><Layers size={18} /></div>
+                        <span className="text-base font-black text-slate-800 tracking-tight">KOSHA-MS</span>
+                    </div>
+                    <button
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                        aria-label="메뉴 열기"
+                    >
+                        <Menu size={22} />
+                    </button>
+                </div>
+                <div className="p-4 md:p-8">
                 <div className="max-w-4xl mx-auto space-y-8">
                     <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                         <div className="flex-1 w-full order-2 md:order-1">
@@ -1134,6 +1171,7 @@ function DashboardContent() {
                             )}
                         </section>
                     )}
+                </div>
                 </div>
             </main>
 

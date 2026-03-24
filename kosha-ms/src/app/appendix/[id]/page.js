@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { QUICK_LINKS } from '@/data/koshaData'
-import { ArrowLeft, Plus, FileText, UploadCloud, Trash2, Edit2, Check, X, Layers, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, UploadCloud, Trash2, Edit2, Check, X, Layers, ExternalLink, Link2 } from 'lucide-react'
 
 export default function AppendixPage() {
     const params = useParams()
@@ -17,11 +17,16 @@ export default function AppendixPage() {
     const [editingTitle, setEditingTitle] = useState('')
     const [isLoaded, setIsLoaded] = useState(false)
 
+    // 기존 업로드 파일 선택 모달
+    const [showFilePicker, setShowFilePicker] = useState(false)
+    const [filePickerTargetId, setFilePickerTargetId] = useState(null)
+    const [existingFiles, setExistingFiles] = useState([]) // { key, name, url }
+    const [filePickerSearch, setFilePickerSearch] = useState('')
+
     useEffect(() => {
-        setIsLoaded(false) // Reset loaded state on docId change
+        setIsLoaded(false)
         
         let linkTitle = ""
-        // Attempt to load renamed quickLinks from dashboard
         const savedLinks = localStorage.getItem('kosha_quick_links')
         if (savedLinks) {
             try {
@@ -45,7 +50,6 @@ export default function AppendixPage() {
         }
 
         if (linkTitle) {
-            // Load saved data for this specific docId if it exists
             const savedData = localStorage.getItem(`appendix_docs_${docId}`)
             if (savedData) {
                 try {
@@ -62,7 +66,6 @@ export default function AppendixPage() {
         }
     }, [docId])
 
-    // Save changes to localStorage whenever documents array updates
     useEffect(() => {
         if (isLoaded && docId) {
             localStorage.setItem(`appendix_docs_${docId}`, JSON.stringify(documents))
@@ -78,14 +81,12 @@ export default function AppendixPage() {
     const handleAddDocument = (e) => {
         e.preventDefault()
         const finalTitle = newItemTitle.trim() || '새 항목'
-
         const newDoc = {
             id: Date.now().toString(),
             title: finalTitle,
             customCode: `NEW-${Math.floor(1000 + Math.random() * 9000)}`,
             fileName: null
         }
-        
         setDocuments(prev => [...prev, newDoc])
         setNewItemTitle('')
     }
@@ -102,13 +103,18 @@ export default function AppendixPage() {
 
         const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name
 
-        // Try to upload to Vercel Blob
         try {
             const formData = new FormData()
             formData.append('file', file)
             const res = await fetch('/api/upload', { method: 'POST', body: formData })
             if (res.ok) {
                 const blob = await res.json()
+                // 업로드된 파일을 kosha_uploaded_files에도 저장 (메인 대시보드와 공유)
+                try {
+                    const existingUploads = JSON.parse(localStorage.getItem('kosha_uploaded_files') || '{}')
+                    existingUploads[`appendix-${id}-${Date.now()}`] = { name: file.name, url: blob.url }
+                    localStorage.setItem('kosha_uploaded_files', JSON.stringify(existingUploads))
+                } catch {}
                 setDocuments(prev => prev.map(d =>
                     d.id === id
                         ? { ...d, fileName: file.name, fileUrl: blob.url, title: fileNameWithoutExt }
@@ -120,12 +126,42 @@ export default function AppendixPage() {
             console.warn('Blob upload failed, saving filename only:', err)
         }
 
-        // Fallback: save filename only (local mode)
         setDocuments(prev => prev.map(d =>
             d.id === id
                 ? { ...d, fileName: file.name, fileUrl: null, title: fileNameWithoutExt }
                 : d
         ))
+    }
+
+    // 기존 업로드 목록 불러오기 및 모달 열기
+    const openFilePicker = (docId) => {
+        const raw = localStorage.getItem('kosha_uploaded_files')
+        if (!raw) { alert('아직 업로드된 파일이 없습니다.'); return }
+        try {
+            const uploads = JSON.parse(raw)
+            const list = Object.entries(uploads)
+                .filter(([, v]) => v && typeof v === 'object' && v.url)
+                .map(([key, v]) => ({ key, name: v.name || key, url: v.url }))
+            if (list.length === 0) { alert('Vercel에 업로드된 파일이 없습니다. 먼저 파일 업로드 후 이용해주세요.'); return }
+            setExistingFiles(list)
+            setFilePickerTargetId(docId)
+            setFilePickerSearch('')
+            setShowFilePicker(true)
+        } catch {
+            alert('파일 목록을 불러오는 데 실패했습니다.')
+        }
+    }
+
+    // 기존 파일 선택 완료
+    const handleSelectExistingFile = (fileItem) => {
+        const fileNameWithoutExt = fileItem.name.split('.').slice(0, -1).join('.') || fileItem.name
+        setDocuments(prev => prev.map(d =>
+            d.id === filePickerTargetId
+                ? { ...d, fileName: fileItem.name, fileUrl: fileItem.url, title: fileNameWithoutExt }
+                : d
+        ))
+        setShowFilePicker(false)
+        setFilePickerTargetId(null)
     }
 
     const handleOpenFile = (doc) => {
@@ -151,12 +187,14 @@ export default function AppendixPage() {
         setEditingDocId(null)
     }
 
+    const filteredFiles = existingFiles.filter(f =>
+        f.name.toLowerCase().includes(filePickerSearch.toLowerCase())
+    )
+
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
             <div className="max-w-5xl mx-auto">
-                {/* Header Container */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                    {/* Header Left Component */}
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => router.push('/?tab=appendix#appendix-section')}
@@ -172,8 +210,6 @@ export default function AppendixPage() {
                             <p className="text-sm text-slate-500">항목을 추가하고 관련 파일을 업로드 및 관리할 수 있습니다.</p>
                         </div>
                     </div>
-
-                    {/* Logo (Right) */}
                     <div className="flex items-center justify-end gap-3 hidden md:flex">
                         <div className="flex items-center gap-1.5 select-none">
                             <svg width="28" height="28" viewBox="0 0 100 100" className="text-[#00509a]" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -191,11 +227,9 @@ export default function AppendixPage() {
                     </div>
                 </div>
 
-                {/* Main Content Body */}
                 <div className="h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 w-full mb-8 rounded-full opacity-20"></div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                    {/* Left Column (Actions) */}
                     <div className="lg:col-span-1 space-y-6">
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-8">
                             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -223,7 +257,6 @@ export default function AppendixPage() {
                         </div>
                     </div>
 
-                    {/* Right Column (List) */}
                     <div className="lg:col-span-3">
                         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                             <div className="p-5 md:p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -243,7 +276,7 @@ export default function AppendixPage() {
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-700">등록된 항목이 없습니다</h3>
                                     <p className="text-sm mt-2 text-slate-500 max-w-sm">
-                                        좌측 폼을 이용해 '{appendixData.title}'에 속할 새로운 항목(기준서 등)을 추가해보세요. 항목 수 제한 없이 무제한으로 저장 가능합니다.
+                                        좌측 폼을 이용해 '{appendixData.title}'에 속할 새로운 항목(기준서 등)을 추가해보세요.
                                     </p>
                                 </div>
                             ) : (
@@ -301,17 +334,27 @@ export default function AppendixPage() {
                                                 </div>
                                             </div>
                                             
-                                            <div className="flex items-center justify-start md:justify-end shrink-0 pl-[46px] md:pl-0">
+                                            <div className="flex items-center justify-start md:justify-end shrink-0 pl-[46px] md:pl-0 gap-2">
+                                                {/* 기존 업로드 파일 연결 버튼 */}
+                                                <button
+                                                    onClick={() => openFilePicker(doc.id)}
+                                                    className="border px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300"
+                                                    title="이미 업로드된 파일 연결"
+                                                >
+                                                    <Link2 size={15} />
+                                                    기존 파일 연결
+                                                </button>
+                                                {/* 새 파일 업로드 버튼 */}
                                                 <label className={`cursor-pointer border px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm
                                                     ${doc.fileName ? 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50' : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300'}`}
                                                 >
                                                     <UploadCloud size={16} />
-                                                    {doc.fileName ? '파일 변경' : '문서 첨부'}
+                                                    {doc.fileName ? '파일 변경' : '새로 업로드'}
                                                     <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, doc.id)} />
                                                 </label>
                                                 <button 
                                                     onClick={() => handleDelete(doc.id)}
-                                                    className="p-2 ml-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
                                                     title="이 항목 삭제"
                                                 >
                                                     <Trash2 size={18} />
@@ -327,6 +370,59 @@ export default function AppendixPage() {
 
                 </div>
             </div>
+
+            {/* 기존 업로드 파일 선택 모달 */}
+            {showFilePicker && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl">
+                        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white rounded-t-2xl">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <Link2 size={20} className="text-indigo-600" />
+                                    기존 업로드 파일 연결
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-0.5">Vercel에 이미 업로드된 파일을 재사용합니다.</p>
+                            </div>
+                            <button onClick={() => setShowFilePicker(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-4 border-b border-slate-100">
+                            <input
+                                type="text"
+                                placeholder="파일명 검색..."
+                                value={filePickerSearch}
+                                onChange={e => setFilePickerSearch(e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                            {filteredFiles.length === 0 ? (
+                                <div className="text-center text-slate-400 py-8 text-sm">검색 결과가 없습니다.</div>
+                            ) : filteredFiles.map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => handleSelectExistingFile(f)}
+                                    className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+                                >
+                                    <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg shrink-0 group-hover:bg-indigo-200 transition-colors">
+                                        <FileText size={16} />
+                                    </div>
+                                    <div className="flex-1 overflow-hidden">
+                                        <div className="text-sm font-bold text-slate-700 group-hover:text-indigo-700 truncate">{f.name}</div>
+                                        <div className="text-[10px] text-slate-400 truncate">{f.url}</div>
+                                    </div>
+                                    <div className="text-xs text-indigo-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">선택</div>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl text-center">
+                            <p className="text-xs text-slate-400">총 {filteredFiles.length}개의 파일이 있습니다.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
