@@ -41,6 +41,7 @@ function DashboardContent() {
     const [showUndoToast, setShowUndoToast] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+    const [isSyncing, setIsSyncing] = useState(false)
 
     // Helper added to fix React object render crash
     const getFileName = (fileData) => {
@@ -96,21 +97,28 @@ function DashboardContent() {
             e.stopPropagation();
         }
         
-        const fileData = (fileId && typeof uploadedFiles[fileId] === 'object') ? uploadedFiles[fileId] : null;
+        // Standard way: open from Vercel Blob URL (Shared Link)
         if (fileData && fileData.url) {
             window.open(fileData.url, '_blank');
             return;
         }
 
-        let fileName = fileNameOverride || (fileId ? uploadedFiles[fileId] : null);
-        if (typeof fileName === 'object') fileName = fileName.name;
+        // Search for file URL in uploadedFiles if not directly provided
+        const storedFile = fileId ? uploadedFiles[fileId] : null;
+        if (storedFile && typeof storedFile === 'object' && storedFile.url) {
+            window.open(storedFile.url, '_blank');
+            return;
+        }
+
+        let fileName = fileNameOverride || (fileId ? (typeof uploadedFiles[fileId] === 'string' ? uploadedFiles[fileId] : null) : null);
+        if (!fileName && storedFile && typeof storedFile === 'object') fileName = storedFile.name;
 
         if (!fileName) {
             alert('첨부된 파일이 없습니다. 먼저 파일을 업로드해주세요.');
             return;
         }
         
-        // Normalize slashes and encode segments to preserve path structure
+        // Final fallback to local uploads (Only works on original device if file was local)
         const safePath = fileName.replace(/\\/g, '/').split('/')
             .map(segment => encodeURIComponent(segment))
             .join('/');
@@ -120,36 +128,92 @@ function DashboardContent() {
     };
 
     const searchParams = useSearchParams();
+
+    // 1. Fetch data from Vercel KV (Shared Storage)
+    const fetchSharedState = async () => {
+        try {
+            const res = await fetch('/api/data');
+            if (!res.ok) throw new Error('Failed to fetch from KV');
+            const data = await res.json();
+            
+            if (data && Object.keys(data).length > 0) {
+                if (data.quickLinks) setQuickLinks(data.quickLinks);
+                if (data.favorites) setFavorites(data.favorites);
+                if (data.uploadedFiles) setUploadedFiles(data.uploadedFiles);
+                if (data.koshaData) setKoshaData(data.koshaData);
+                if (data.recentUpdates) setRecentUpdates(data.recentUpdates);
+            }
+        } catch (error) {
+            console.error('Error fetching shared state:', error);
+            // Fallback to localStorage if KV fails
+            const savedLinks = localStorage.getItem('kosha_quick_links');
+            if (savedLinks) setQuickLinks(JSON.parse(savedLinks));
+            const savedFavorites = localStorage.getItem('kosha_favorites');
+            if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
+            const savedFiles = localStorage.getItem('kosha_uploaded_files');
+            if (savedFiles) setUploadedFiles(JSON.parse(savedFiles));
+            const savedData = localStorage.getItem('kosha_main_data');
+            if (savedData) setKoshaData(JSON.parse(savedData));
+            const savedUpdates = localStorage.getItem('kosha_recent_updates');
+            if (savedUpdates) setRecentUpdates(JSON.parse(savedUpdates));
+        } finally {
+            setIsDataLoaded(true);
+        }
+    };
+
+    // 2. Initial Setup
     useEffect(() => {
-        const savedLinks = localStorage.getItem('kosha_quick_links')
-        if (savedLinks) { try { setQuickLinks(JSON.parse(savedLinks)) } catch (e) {} }
-        const savedFavorites = localStorage.getItem('kosha_favorites')
-        if (savedFavorites) { try { setFavorites(JSON.parse(savedFavorites)) } catch (e) {} }
-        const savedUploadedFiles = localStorage.getItem('kosha_uploaded_files')
-        if (savedUploadedFiles) { try { setUploadedFiles(JSON.parse(savedUploadedFiles)) } catch (e) {} }
-        const savedMainData = localStorage.getItem('kosha_main_data')
-        if (savedMainData) { try { setKoshaData(JSON.parse(savedMainData)) } catch (e) {} }
-        const savedUpdates = localStorage.getItem('kosha_recent_updates')
-        if (savedUpdates) { try { setRecentUpdates(JSON.parse(savedUpdates)) } catch (e) {} }
+        fetchSharedState();
         
-        // Check for specific tab parameter to auto-open sections (like Appendix)
+        // Handle tab deep-linking
         const tab = searchParams.get('tab');
         if (tab === 'appendix') {
             setOpenChapter('부록');
         }
-        
-        setIsDataLoaded(true)
-    }, [searchParams])
+    }, [searchParams]);
 
+    // 3. Save data to Vercel KV (Shared Storage)
+    const saveToSharedState = async (state) => {
+        setIsSyncing(true);
+        try {
+            await fetch('/api/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            });
+        } catch (error) {
+            console.error('Error saving to shared state:', error);
+        } finally {
+            setTimeout(() => setIsSyncing(false), 500); // Small delay for visual feedback
+        }
+    };
+
+    // 4. Persistence Effect
     useEffect(() => {
         if (isDataLoaded) {
-            localStorage.setItem('kosha_quick_links', JSON.stringify(quickLinks))
-            localStorage.setItem('kosha_favorites', JSON.stringify(favorites))
-            localStorage.setItem('kosha_uploaded_files', JSON.stringify(uploadedFiles))
-            localStorage.setItem('kosha_main_data', JSON.stringify(koshaData))
-            localStorage.setItem('kosha_recent_updates', JSON.stringify(recentUpdates))
+            const stateToSave = {
+                quickLinks,
+                favorites,
+                uploadedFiles,
+                koshaData,
+                recentUpdates
+            };
+            
+            // Local fallback
+            localStorage.setItem('kosha_quick_links', JSON.stringify(quickLinks));
+            localStorage.setItem('kosha_favorites', JSON.stringify(favorites));
+            localStorage.setItem('kosha_uploaded_files', JSON.stringify(uploadedFiles));
+            localStorage.setItem('kosha_main_data', JSON.stringify(koshaData));
+            localStorage.setItem('kosha_recent_updates', JSON.stringify(recentUpdates));
+
+            // Remote (Shared) persistence - Debounced
+            const timer = setTimeout(() => {
+                saveToSharedState(stateToSave);
+            }, 3000); // 3-second debounce to save on changes
+
+            return () => clearTimeout(timer);
         }
-    }, [quickLinks, favorites, uploadedFiles, koshaData, recentUpdates, isDataLoaded])
+    }, [quickLinks, favorites, uploadedFiles, koshaData, recentUpdates, isDataLoaded]);
 
     const toggleFavorite = (e, docId) => {
         e.preventDefault(); e.stopPropagation();
@@ -649,15 +713,18 @@ function DashboardContent() {
                             <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-lg shadow-blue-100"><Layers size={20} /></div>
                             <h1 className="text-lg font-black text-slate-800 tracking-tight">KOSHA-MS</h1>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <button onClick={handleGoHome} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="처음으로 돌아가기">
-                                <Home size={18} />
-                            </button>
-                            <button onClick={handleUndo} disabled={history.length === 0} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${history.length > 0 ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'text-slate-300 pointer-events-none'}`} title="직전 작업 되돌리기">
-                                <RotateCcw size={14} className={history.length > 0 ? 'animate-in fade-in transition-transform group-hover:rotate-[-45deg]' : ''} />
-                                <span>되돌리기</span>
-                            </button>
-                        </div>
+                            <div className="flex items-center gap-2">
+                                {isDataLoaded && (
+                                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${isSyncing ? 'bg-green-50 text-green-600 animate-pulse' : 'text-slate-400'}`}>
+                                        <History size={12} />
+                                        <span>{isSyncing ? '클라우드 저장 중...' : '클라우드 동기화'}</span>
+                                    </div>
+                                )}
+                                <button onClick={handleUndo} disabled={history.length === 0} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${history.length > 0 ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'text-slate-300 pointer-events-none'}`} title="직전 작업 되돌리기">
+                                    <RotateCcw size={14} className={history.length > 0 ? 'animate-in fade-in transition-transform group-hover:rotate-[-45deg]' : ''} />
+                                    <span>되돌리기</span>
+                                </button>
+                            </div>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
